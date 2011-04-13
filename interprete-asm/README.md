@@ -1,4 +1,4 @@
-Un sencillo intérprete para el ensamblador que nos han dado en clase.
+Un sencillo intérprete para el ensamblador de TG00PROC que nos han dado en clase.
 
 `python interprete.py archivo` Interpreta el archivo `archivo`, devolviendo al final el estado de la memoria, de los registros y de BUSIO.
 
