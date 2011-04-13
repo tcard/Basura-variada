@@ -16,6 +16,14 @@ busio = 0x00
 
 archivo = open(sys.argv[1])
 
+debug = False
+try:
+	debug = sys.argv[2]
+	if debug == "--debug":
+		debug = True
+except:
+	pass
+	
 flags = {}
 
 PC = 0xA0 # El programa se almacena en la segunda mitad de la memoria
@@ -44,6 +52,9 @@ mem[PC] = "STOP"
 PC = 0xA0
 	
 while (mem[PC] != "STOP"):
+	if debug:
+		print mem[PC]
+		
 	i = mem[PC].split()
 		
 	if i[0] == "J":
@@ -111,13 +122,28 @@ while (mem[PC] != "STOP"):
 		
 	else:
 		raise Exception("No se reconoció la instrucción: " + i[0])
-		
-print "MEMORIA:\n"
-for k,v in mem.items():
-	print repr(hex(int(k)).upper()).rjust(2), "=".rjust(3), repr(v).rjust(4)
 	
-print "\nREGISTROS:\n"
-for k,v in reg.items():
-	print repr(k).rjust(2), "=".rjust(3), repr(v).rjust(4), repr(hex(v).upper()).rjust(4)
+	if debug:
+			print "MEMORIA:\n"
+			for k,v in mem.items():
+				print repr(hex(int(k)).upper()).rjust(2), "=".rjust(3), repr(v).rjust(4)
 
-print "\nBUSIO: " + repr(busio)
+			print "\nREGISTROS:\n"
+			for k,v in reg.items():
+				print repr(k).rjust(2), "=".rjust(3),
+				print repr(v).rjust(4), repr(hex(v).upper()).rjust(4)
+
+			print "\nBUSIO: " + repr(busio)
+			
+			raw_input("Siguiente: [ENTER]")
+			
+if not debug:
+	print "MEMORIA:\n"
+	for k,v in mem.items():
+		print repr(hex(int(k)).upper()).rjust(2), "=".rjust(3), repr(v).rjust(4)
+
+	print "\nREGISTROS:\n"
+	for k,v in reg.items():
+		print repr(k).rjust(2), "=".rjust(3), repr(v).rjust(4), repr(hex(v).upper()).rjust(4)
+
+	print "\nBUSIO: " + repr(busio)
