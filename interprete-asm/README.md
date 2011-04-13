@@ -1,6 +1,7 @@
 Un sencillo intérprete para el ensamblador que nos han dado en clase.
 
 `python interprete.py archivo` Interpreta el archivo `archivo`, devolviendo al final el estado de la memoria, de los registros y de BUSIO.
+
 `python interprete.py archivo --debug` Interpreta cada instrucción paso a paso, mostrando el estado interno en cada paso.
 
 Me he tomado algunas libertades:
