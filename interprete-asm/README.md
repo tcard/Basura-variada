@@ -8,6 +8,6 @@ Me he tomado algunas libertades:
 
 - Soporte para flags. `J flag` y `JGT ra, rb, flag` saltarán a `flag:`, aunque no esté así especificado en el guión de la práctica.
 - Comentarios: empiezan por `--`.
-- Los registros van del $0 al $7. La memoria es infinita, se expresa con un número hexadecimal de dos cifras (ej. 3F). El programa generado se guarda también en memoria, a partir de la posición A0, así que mejor no usarla a partir de ahí. Todo se puede leer y escribir, así que cuidado.
+- Los registros van del $0 al $7. La memoria se expresa con un número hexadecimal de dos cifras (ej. 3F). El programa generado se guarda también en memoria, a partir de la posición A0, así que mejor no usarla a partir de ahí. -Todo se puede leer y escribir, así que cuidado.- Se respetan los registros y posiciones de memoria escribibles o no.
 - Para tener un estado inicial de memoria antes de ejecutar el programa, hay que declararla de esta forma: `. DIR = Valor`. DIR es una dirección hexadecimal, Valor puede ser cualquier cosa.
 - Si una posición de memoria no está inicializada, bien con la sintaxis anterior, bien con ST, intentar leerla provocará un error. 
