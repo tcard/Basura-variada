@@ -18,7 +18,7 @@ busio = 0x00
 archivo = open(sys.argv[1])
 
 debug = False
-try
+try:
 	debug = sys.argv[2]
 	if debug == "--debug":
 		debug = True
