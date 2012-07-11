@@ -1,0 +1,269 @@
+<head>
+<meta http-equiv='Content-Type' content="text/html; charset=UTF-8" />
+</head>
+
+<style type="text/css">
+body {
+	background-color: gray;
+}
+
+#hidden {
+	display: none;
+}
+
+#tabla {
+	border-collapse: collapse;
+	font-size: xx-small;
+	color: black;
+	background-color: white;
+}
+
+#tabla td {
+	margin: 0;
+	padding: 0;
+	width: 15;
+	height: 15;
+	border: none;
+}
+</style>
+
+<script type="text/javascript">
+function createCookie(name,value,days) {
+	if (days) {
+		var date = new Date();
+		date.setTime(date.getTime()+(days*24*60*60*1000));
+		var expires = "; expires="+date.toGMTString();
+	}
+	else var expires = "";
+	document.cookie = name+"="+value+expires+"; path=/";
+	return document.cookie;
+}
+
+function readCookie(name) {
+	var nameEQ = name + "=";
+	var ca = document.cookie.split(';');
+	for(var i=0;i < ca.length;i++) {
+		var c = ca[i];
+		while (c.charAt(0)==' ') c = c.substring(1,c.length);
+		if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length,c.length);
+	}
+	return null;
+}
+
+function eraseCookie(name) {
+	createCookie(name,"",-1);
+}
+
+var cols=30;
+var rows=30;
+var casillas=[];
+var serp=[];
+var start=false;
+var intervalo;
+var uno_por_vez=true;
+var cont=0;
+var vel=50;
+
+function rellenar(row,col,dir,pos) {
+	style='background-color:black;';
+	casillas[row][col].setAttribute('style',style);
+	casillas[row][col].setAttribute('alt',dir+','+pos);
+}
+
+function vaciar(row,col) {
+	casillas[row][col].removeAttribute('alt');
+	casillas[row][col].removeAttribute('style');
+}
+
+function mover() {
+	var ret=0;
+	var sig_serp=[];
+	
+	// Calcula las casillas con serpiente
+	
+	for(var i=0;i<rows;i++) {
+		for(var j=0;j<cols;j++) {
+			var casilla=casillas[i][j];
+			if(casilla.getAttribute('alt')==null) continue;
+			serp[casilla.getAttribute('alt').substr(2)]=[casilla,i,j];
+		}
+	}
+	
+	for(var i=1;i<serp.length;i++) {
+		var sig;
+		switch(serp[i][0].getAttribute('alt')[0]) {
+		case 'u':
+			sig=[serp[i][1]-1,serp[i][2]]
+			break;
+		case 'd':
+			sig=[serp[i][1]+1,serp[i][2]]
+			break;
+		case 'l':
+			sig=[serp[i][1],serp[i][2]-1]
+			break;
+		case 'r':
+			sig=[serp[i][1],serp[i][2]+1]
+			break;
+		}
+		if(sig[0]>rows-1) sig[0]-=rows;
+		if(sig[0]<0) sig[0]+=rows;
+		if(sig[1]>cols-1) sig[1]-=cols;
+		if(sig[1]<0) sig[1]+=cols;
+		var dir=serp[i][0].getAttribute('alt')[0];
+		if(casillas[sig[0]][sig[1]].getAttribute('alt')!=null) {
+			if(i==1) {
+			if(casillas[sig[0]][sig[1]].getAttribute('id')=='comida')
+				ret='comida';
+			else
+				ret='clonk';
+				return ret;
+			} else {
+				var dir=casillas[sig[0]][sig[1]].getAttribute('alt')[0];
+			}
+		}
+		if(casillas[sig[0]][sig[1]].getAttribute('id')=='comida') ret='comida';
+		rellenar(sig[0],sig[1],dir,i);
+		sig_serp[i]=[casillas[sig[0]][sig[1]],sig[0],sig[1]];
+	}
+	vaciar(serp[serp.length-1][1],serp[serp.length-1][2]);
+	serp=sig_serp;
+	return ret;
+}
+
+function recarga() {
+	document.getElementById('puntu').innerHTML="0";
+	document.getElementById('max').innerHTML=readCookie('max');
+	tabla=document.createElement('table');
+	tabla.setAttribute('id','tabla');
+	
+	document.getElementsByTagName('body')[0].replaceChild(tabla,document.getElementById('tabla'));
+	
+	for(var i=0;i<rows;i++) {
+		tr=document.createElement('tr');
+		tr.setAttribute('id','tr'+i);
+		casillas[i]=[];
+		for(var j=0;j<cols;j++) {
+			td=document.createElement('td');
+			td.setAttribute('id','td'+i+"_"+j);
+			tr.appendChild(td);
+			casillas[i][j]=td;
+		}
+		document.getElementById('tabla').appendChild(tr);
+	}
+	
+	serp=[,[casillas[rows/2][cols/2],rows/2,cols/2],
+		[casillas[rows/2][cols/2-1],rows/2,cols/2-1],
+		[casillas[rows/2+1][cols/2-1],rows/2+1,cols/2-1],
+		[casillas[rows/2+2][cols/2-1],rows/2+2,cols/2-1]];
+	rellenar(rows/2,cols/2,'r','1');
+	rellenar(rows/2,cols/2-1,'r','2');
+	rellenar(rows/2+1,cols/2-1,'u','3');
+	rellenar(rows/2+2,cols/2-1,'u','4');
+	
+	casillas[rows/2][cols/2+6].setAttribute('id','comida');
+	casillas[rows/2][cols/2+6].innerHTML='o';
+	
+	uno_por_vez=true;	
+}
+
+function clonk() {
+	uno_por_vez=true;
+	mov=mover();
+	if(mov=='clonk') {
+		alert('Aaah, ¡te bañaste!');
+		clearInterval(intervalo);
+		setTimeout('recarga()',300);
+	} else if(mov=='comida') {
+		puntos=document.getElementById('puntu').innerHTML/1+(20-2*(vel/10));
+		document.getElementById('puntu').innerHTML=puntos;
+		if (document.getElementById('max')-0 < puntos) {
+			createCookie('max',puntos,99999);
+			document.getElementById('max').innerHTML=readCookie('var');
+		}
+		document.getElementById('comida').innerHTML='';
+		document.getElementById('comida').removeAttribute('id');
+		do {
+			var nueva=casillas[Math.floor(Math.random()*(rows))][Math.floor(Math.random()*(rows))];
+		} while(nueva.getAttribute('alt')!=null);
+		nueva.setAttribute('id','comida');
+		nueva.innerHTML="o";
+		
+		var dir=serp[serp.length-1][0].getAttribute('alt')[0];
+		switch(dir) {
+		case 'u':
+			var pos=[serp[serp.length-1][1]+1,serp[serp.length-1][2]];
+			break;
+		case 'd':
+			var pos=[serp[serp.length-1][1]-1,serp[serp.length-1][2]];
+			break;
+		case 'l':
+			var pos=[serp[serp.length-1][1],serp[serp.length-1][2]+1];
+			break;
+		case 'r':
+			var pos=[serp[serp.length-1][1],serp[serp.length-1][2]-1];
+			break;
+		}
+		
+		serp[serp.length]=[casillas[pos[0]][pos[1]],pos[0],pos[1]];
+		rellenar(pos[0],pos[1],dir,serp.length-1);
+	}
+}
+
+window.onkeydown=function(e) {
+	var evt=e?e:event;
+	var tecla=window.Event?evt.which:evt.keyCode;
+	var dir=false;
+	var actual=serp[1][0].getAttribute('alt')[0];
+	switch(tecla) {
+	case 189:
+	case 109:
+		vel+=10;
+		clearInterval(intervalo);
+		intervalo=setInterval('clonk()',vel);
+		break;
+	case 187:
+	case 107:
+		vel-=10;
+		clearInterval(intervalo);
+		intervalo=setInterval('clonk()',vel);
+		break;
+	case 38:
+		if(actual=='d') break;
+		dir='u';
+		break;
+	case 40:
+		if(actual=='u') break;
+		dir='d';
+		break;
+	case 37:
+		if(actual=='r') break;
+		dir='l';
+		break;
+	case 39:
+		if(actual=='l') break;
+		dir='r';
+		break;
+	case 13:
+		if(start) {
+			clearInterval(intervalo);
+			start=false;
+		} else {
+			intervalo=setInterval("clonk()",vel);
+			start=true;
+		}
+	}
+	
+	if(dir && uno_por_vez) {
+		serp[1][0].setAttribute('alt',dir+serp[1][0].getAttribute('alt').substr(1));
+		uno_por_vez=false;
+	}
+};
+
+window.onload=function() {recarga()};
+</script>
+
+<table id="tabla" border="1">
+</table>
+<p style="color:white;" id="puntu">0</p>
+<p style="color:white;">Máx.: <span id="max">0</span></p>
+<p style="color:white;">Enter: Comenzar/Pausa; Flechas: ¡adivina!</p>
