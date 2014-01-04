@@ -1,18 +1,28 @@
 # -*- coding: UTF-8 -*-
 
 import sys
+import os
 import re
 
 mem = {}
-reg = {	"$0":0x00,
-				"$1":0x00,
-				"$2":0x00,
-				"$3":0x00,
-				"$4":0x00,
-				"$5":0x00,
-				"$6":0x00,
-				"$7":0x00,				
-			}
+reg = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+ops = {
+	'J':	0b11100,
+	'JGT':	0b11101,
+	'ADDi':	0b00000,
+	'SUBi':	0b00001,
+	'ADDd':	0b01000,
+	'SUBd':	0b01001,
+	'ADDn':	0b10000,
+	'SUBn':	0b10001,
+	'RSH':	0b00101,
+	'LSH':	0b00100,
+	'LD':	0b11000,
+	'ST':	0b11001,
+	'IN':	0b11010,
+	'OUT':	0b11011,
+}
+
 busio = 0x00
 
 archivo = open(sys.argv[1])
@@ -26,6 +36,7 @@ except:
 	pass
 	
 flags = {}
+resolveFlags = []
 
 PC = 0xA0 # El programa se almacena en la segunda mitad de la memoria
 for fila in archivo: # Preprocesador
@@ -35,134 +46,255 @@ for fila in archivo: # Preprocesador
 			flags[fila[0:-1]] = PC
 		elif fila[0] == '.': # Guardar en memoria
 			i = fila.split()
-			if(i[0]) == "BUSIO":
-				busio = i[3]
-			elif int(i[1], 16) > 255:
+			if int(i[1], 16) > 255:
 				raise Exception("Dirección de memoria inválida: " + i[1])
 			else:
-				mem[int(i[1], 16)] = i[3]
+				mem[int(i[1], 16)] = int(i[3], 16)
 		elif fila == "\n":
 			pass
 		elif fila[0:2] == "--":
 			pass
 		else:
-			mem[PC] = fila.split('--')[0]
+			ins = fila.split('--')[0]
+			
+			match = re.match("^J ([a-zA-Z0-9]+)\s*$", ins)
+			if match:
+				mem[PC] = ops['J'] << 11
+				resolveFlags.append((PC, match.group(1)))
+
+			elif re.match("^JGT \$([1-7]), ?\$([0-7]), ?([a-zA-Z0-9]+)\s*$", ins):
+				match = re.match("^JGT \$([1-7]), ?\$([0-7]), ?([a-zA-Z0-9]+)\s*$", ins)
+				mem[PC] = ops['JGT'] << 11 | \
+					(int(match.group(1)) & 0b111) << 8 | \
+					(int(match.group(2)) & 0b111) << 5
+				PC = PC + 1
+				try:
+					mem[PC] = int(match.group(3), 16)
+				except:
+					resolveFlags.append((PC, match.group(3), (lambda myPC: lambda addr: addr-myPC)(PC)))
+					
+			elif re.match("^ADDi \$([1-7]), ?([0-9a-fA-F]{1,4})\s*$", ins):
+				match = re.match("^ADDi \$([1-7]), ?([0-9a-fA-F]{1,4})\s*$", ins)
+				mem[PC] = ops['ADDi'] << 11 | \
+					(int(match.group(1)) & 0b111) << 8
+				PC = PC + 1
+				mem[PC] = int(match.group(2), 16)
+				
+			elif re.match("^SUBi \$([1-7]), ?([0-9a-fA-F]{1,4})\s*$", ins):
+				match = re.match("^SUBi \$([1-7]), ?([0-9a-fA-F]{1,4})\s*$", ins)
+				mem[PC] = ops['SUBi'] << 11 | \
+					(int(match.group(1)) & 0b111) << 8
+				PC = PC + 1
+				mem[PC] = int(match.group(2), 16)
+
+			elif re.match("^ADDd \$([1-7]), ?\$([0-7])\s*$", ins):
+				match = re.match("^ADDd \$([1-7]), ?\$([0-7])\s*$", ins)
+				mem[PC] = ops['ADDd'] << 11 | \
+					(int(match.group(1)) & 0b111) << 8 | \
+					(int(match.group(2)) & 0b111) << 5
+				
+			elif re.match("^SUBd \$([1-7]), ?\$([0-7])\s*$", ins):
+				match = re.match("^SUBd \$([1-7]), ?\$([0-7])\s*$", ins)
+				mem[PC] = ops['SUBd'] << 11 | \
+					(int(match.group(1)) & 0b111) << 8 | \
+					(int(match.group(2)) & 0b111) << 5
+				
+			elif re.match("^ADDn \$([1-7]), ?([a-zA-Z0-9]+)\s*$", ins):
+				match = re.match("^ADDn \$([1-7]), ?([a-zA-Z0-9]+)\s*$", ins)
+				mem[PC] = ops['ADDn'] << 11 | \
+					(int(match.group(1)) & 0b111) << 8
+				resolveFlags.append((PC, match.group(2)))
+				
+			elif re.match("^SUBn \$([1-7]), ?([a-zA-Z0-9]+)\s*$", ins):
+				match = re.match("^SUBn \$([1-7]), ?([a-zA-Z0-9]+)\s*$", ins)
+				mem[PC] = ops['SUBn'] << 11 | \
+					(int(match.group(1)) & 0b111) << 8
+				resolveFlags.append((PC, match.group(2)))
+
+			elif re.match("^RSH \$([1-7])\s*$", ins):
+				match = re.match("^RSH \$([1-7])\s*$", ins)
+				mem[PC] = ops['RSH'] << 11 | \
+					(int(match.group(1)) & 0b111) << 8
+				
+			elif re.match("^LSH \$([1-7])\s*$", ins):
+				match = re.match("^RSH \$([1-7])\s*$", ins)
+				mem[PC] = ops['LSH'] << 11 | \
+					(int(match.group(1)) & 0b111) << 8
+
+			elif re.match("^LD \$([0-7]), ?([a-zA-Z0-9]+)\s*$", ins):
+				match = re.match("^LD \$([0-7]), ?([0-9a-fA-F]{1,2})\s*$", ins)
+				mem[PC] = ops['LD'] << 11 | \
+					(int(match.group(1)) & 0b111) << 8
+				resolveFlags.append((PC, match.group(2)))
+				
+			elif re.match("^ST \$([1-7]), ?([a-zA-Z0-9]+)\s*$", ins):
+				match = re.match("^ST \$([1-7]), ?([0-9a-fA-F]{1,2})\s*$", ins)
+				mem[PC] = ops['ST'] << 11 | \
+					(int(match.group(1)) & 0b111) << 8
+				resolveFlags.append((PC, match.group(2)))
+
+			elif re.match("^IN \$([1-7])\s*$", ins):
+				match = re.match("^IN \$([1-7])\s*$", ins)
+				mem[PC] = ops['IN'] << 11 | \
+					(int(match.group(1)) & 0b111) << 8
+				
+			elif re.match("^OUT \$([0-7])\s*$", ins):
+				match = re.match("^OUT \$([0-7])\s*$", ins)
+				mem[PC] = ops['OUT'] << 11 | \
+					(int(match.group(1)) & 0b111) << 8
+
 			PC = PC + 1
 	except IndexError:
 		pass
-	
-mem[PC] = "STOP"
-PC = 0xA0
-	
-while (mem[PC] != "STOP"):
-	if debug:
-		print mem[PC]
-	
-	match = re.match("^J ([a-zA-Z0-9]+)\s*$", mem[PC])
-	if match:
-		print mem[PC]
+
+for rf in resolveFlags:
+	to, fl = rf[0], rf[1]
+	res = 0
+	try:
+		res = int(fl, 16)
+	except:
 		try:
-			PC = flags[match.group(1)]
+			res = flags[fl]
 		except:
-			PC = match.group(1)
-	
-	elif re.match("^JGT (\$[1-7]), ?(\$[0-7]), ?([a-zA-Z0-9]+)\s*$", mem[PC]):
-		match = re.match("^JGT (\$[1-7]), ?(\$[0-7]), ?([a-zA-Z0-9]+)\s*$", mem[PC])
-		if int(reg[match.group(1)]) > int(reg[match.group(2)]):
-			try:
-				PC = flags[match.group(3)]
-			except:
-				PC = PC + 1 + int(match.group(3), 16)
+			raise Exception("No existe flag: "+fl)
+	if not to in mem:
+		mem[to] = 0
+	antes = mem[to]
+	if len(rf) > 2:
+		mem[to] = mem[to] | (rf[2](res & 0xFF) & 0xFF)
+		print "resolved", hex(rf[2](res & 0xFF) & 0xFF), "for flag", fl, "into", hex(to)
+	else:
+		mem[to] = mem[to] | (res & 0xFF)
+		if debug:
+			print "resolved", hex(res & 0xFF), "for flag", fl, "into", hex(to)
+	despues = mem[to]
+
+STOP = 0xFFFF
+mem[PC] = STOP
+PC = 0xA0
+
+print 
+
+def print_memoria(dir=None, omitEmpty=False):
+	if dir is None:
+		dir = range(0, 256)
+	else:
+		dir = [dir]
+	for i in dir:
+		if not i in mem:
+			if not omitEmpty:
+				print hex(i)[2:].upper(), "(no)"
+			continue
+		s = "%016d" % int(bin(mem[i])[2:])
+		op = mem[i] >> 11
+		print hex(i)[2:].upper(), ':', s[:5], s[5:8], s[8:11], s[11:], mem[i], \
+			chr(mem[i]) if mem[i] < 256 else '.', reduce(lambda x, y: y if ops[y] == op else x, ops.keys(), ''), \
+			reduce(lambda x, y: y if flags[y] == i else x, flags.keys(), '')
+
+if debug:
+	print_memoria()
+print
+
+while (mem[PC] != STOP):
+	op = mem[PC] >> 11
+	reg1 = mem[PC] >> 8 & 0b111
+	reg2 = mem[PC] >> 5 & 0b111
+	dirl = mem[PC] & 0xFF
+
+	if debug:
+		print_memoria(PC)
+
+	if op == ops['J']:
+		PC = dirl
+
+	elif op == ops['JGT']:
+		if debug:
+			print 'mayor', reg1, reg[reg1], reg2, reg[reg2], reg[reg1] > reg[reg2], hex(PC + 1 + mem[PC+1])
+		if reg[reg1] > reg[reg2]:
+			PC = PC + 1 + mem[PC+1]
 		else:
-			PC = PC + 1
-			
-	elif re.match("^ADDi (\$[1-7]), ?([0-9a-fA-F]{1,2})\s*$", mem[PC]):
-		match = re.match("^ADDi (\$[1-7]), ?([0-9a-fA-F]{1,2})\s*$", mem[PC])
-		reg[match.group(1)] = int(reg[match.group(1)]) + int(match.group(2), 16)
+			PC = PC + 2
+
+	elif op == ops['ADDi']:
+		reg[reg1] = reg[reg1] + mem[PC + 1]
+		PC = PC + 2
+
+	elif op == ops['SUBi']:
+		reg[reg1] = reg[reg1] - mem[PC + 1]
+		PC = PC + 2
+
+	elif op == ops['ADDd']:
+		reg[reg1] = reg[reg1] + reg[reg2]
+		PC = PC + 1
+
+	elif op == ops['SUBd']:
+		reg[reg1] = reg[reg1] - reg[reg2]
 		PC = PC + 1
 		
-	elif re.match("^SUBi (\$[1-7]), ?([0-9a-fA-F]{1,2})\s*$", mem[PC]):
-		match = re.match("^SUBi (\$[1-7]), ?([0-9a-fA-F]{1,2})\s*$", mem[PC])
-		reg[match.group(1)] = int(reg[match.group(1)]) - int(match.group(2), 16)
+	elif op == ops['ADDn']:
+		reg[reg1] = reg[reg1] + mem[mem[dirl]]
+		PC = PC + 1
+
+	elif op == ops['SUBn']:
+		reg[reg1] = reg[reg1] - mem[mem[dirl]]
+		PC = PC + 1
+
+	elif op == ops['LSH']:
+		reg[reg1] = reg[reg1] << 1
 		PC = PC + 1
 	
-	elif re.match("^ADDd (\$[1-7]), ?(\$[0-7])\s*$", mem[PC]):
-		match = re.match("^ADDd (\$[1-7]), ?(\$[0-7])\s*$", mem[PC])
-		reg[match.group(1)] = int(reg[match.group(1)]) + int(int(reg[match.group(2)]))
+	elif op == ops['RSH']:
+		reg[reg1] = reg[reg1] >> 1
 		PC = PC + 1
-		
-	elif re.match("^SUBd (\$[1-7]), ?(\$[0-7])\s*$", mem[PC]):
-		match = re.match("^SUBd (\$[1-7]), ?(\$[0-7])\s*$", mem[PC])
-		reg[match.group(1)] = int(reg[match.group(1)]) - int(int(reg[match.group(2)]))
+
+	elif op == ops['LD']:
+		reg[reg1] = mem[dirl]
 		PC = PC + 1
-		
-	elif re.match("^ADDn (\$[1-7]), ?([0-9a-fA-F]{1,2})\s*$", mem[PC]):
-		match = re.match("^ADDn (\$[1-7]), ?([0-9a-fA-F]{1,2})\s*$", mem[PC])
-		reg[match.group(1)] = int(reg[match.group(1)]) + int(mem[int(mem[int(match.group(2), 16)],16)])
-		PC = PC + 1
-		
-	elif re.match("^SUBn (\$[1-7]), ?([0-9a-fA-F]{1,2})\s*$", mem[PC]):
-		match = re.match("^SUBn (\$[1-7]), ?([0-9a-fA-F]{1,2})\s*$", mem[PC])
-		reg[match.group(1)] = int(reg[match.group(1)]) - int(mem[int(mem[int(match.group(2), 16)],16)])
-		PC = PC + 1
-	
-	elif re.match("^RSH (\$[1-7])\s*$", mem[PC]):
-		match = re.match("^RSH (\$[1-7])\s*$", mem[PC])
-		reg[match.group(1)] = int(reg[match.group(1)]) >> 1
-		PC = PC + 1
-		
-	elif re.match("^LSH (\$[1-7])\s*$", mem[PC]):
-		match = re.match("^RSH (\$[1-7])\s*$", mem[PC])
-		reg[match.group(1)] = int(reg[match.group(1)]) << 1
-		PC = PC + 1
-	
-	elif re.match("^LD (\$[0-7]), ?([0-9a-fA-F]{1,2})\s*$", mem[PC]):
-		match = re.match("^LD (\$[0-7]), ?([0-9a-fA-F]{1,2})\s*$", mem[PC])
-		reg[match.group(1)] = int(mem[int(match.group(2), 16)], 16)
-		PC = PC + 1
-		
-	elif re.match("^ST (\$[1-7]), ?([0-9a-fA-F]{1,2})\s*$", mem[PC]):
-		match = re.match("^ST (\$[1-7]), ?([0-9a-fA-F]{1,2})\s*$", mem[PC])
-		if (int(match.group(2), 16) < 64 or int(match.group(2), 16) > 255):
+
+	elif op == ops['ST']:
+		if (dirl < 64 or dirl > 255):
 			raise Exception("Dirección de memoria inválida: " + match.group(2))
-		mem[int(match.group(2), 16)] = hex(reg[match.group(1)])
+		mem[dirl] = reg[reg1]
 		PC = PC + 1
 	
-	elif re.match("^IN (\$[1-7])\s*$", mem[PC]):
-		match = re.match("^IN (\$[1-7])\s*$", mem[PC])
-		reg[match.group(1)] = busio
+	elif op == ops['IN']:
+		b = os.sys.stdin.read(1)
+		if b != '':
+			busio = ord(b)
+			reg[reg1] = busio
 		PC = PC + 1
-		
-	elif re.match("^OUT (\$[0-7])\s*$", mem[PC]):
-		match = re.match("^OUT (\$[0-7])\s*$", mem[PC])
-		busio = reg[match.group(1)]
+
+	elif op == ops['OUT']:
+		busio = reg[reg1]
+		print os.sys.stdout.write(chr(busio))
 		PC = PC + 1
 		
 	else:
 		raise Exception("No se reconoció la instrucción: " + mem[PC])
 	
 	if debug:
-			print "MEMORIA:\n"
-			for k,v in mem.items():
-				print repr(hex(int(k))).rjust(2), "=".rjust(3), repr(v).rjust(4)
+		print "MEMORIA:\n"
+		print_memoria(omitEmpty=True)
 
-			print "\nREGISTROS:\n"
-			for k,v in reg.items():
-				print repr(k).rjust(2), "=".rjust(3),
-				print repr(v).rjust(4), repr(hex(v)).rjust(4)
+		print "\nREGISTROS:\n"
+		k = 0
+		for v in reg:
+			print repr(k).rjust(2), "=".rjust(3), repr(v).rjust(4), repr(hex(v)).rjust(4)
+			k += 1
 
-			print "\nBUSIO: " + repr(busio)
-			
-			raw_input("Siguiente: [ENTER]")
+		print "\nBUSIO: " + repr(busio)
+		
+		raw_input("Siguiente: [ENTER]")
 			
 			
 if not debug:
 	print "MEMORIA:\n"
-	for k,v in mem.items():
-		print repr(hex(int(k))).rjust(2), "=".rjust(3), repr(v).rjust(4)
+	print_memoria(omitEmpty=True)
 
 	print "\nREGISTROS:\n"
-	for k,v in reg.items():
+	k = 0
+	for v in reg:
 		print repr(k).rjust(2), "=".rjust(3), repr(v).rjust(4), repr(hex(v)).rjust(4)
+		k += 1
 
 	print "\nBUSIO: " + repr(busio)
